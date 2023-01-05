@@ -20,6 +20,7 @@ from kafka_example.kafka import (
     TransactionValue
 )
 
+# Test data for random generation of transactions
 ACCOUNT_IDS = [
     "account_1",
     "account_2",
@@ -50,13 +51,20 @@ TEST_ENTITIES = [
 
 def create_transaction_topic(bootstrap_servers: str, args: argparse.Namespace):
     """Creates 'transactions' topic for example"""
+    # Create admin client
     admin_client = AdminClient({"bootstrap.servers": bootstrap_servers})
+
+    # Create topic
     topic = NewTopic(
         "transactions",
         num_partitions=1,
         replication_factor=3
     )
+
+    # Create topic, retrieve future
     topics_to_futures = admin_client.create_topics([topic])
+
+    # Wait for all topics to be created
     for topic, future in topics_to_futures.items():
         try:
             future.result()
@@ -66,9 +74,12 @@ def create_transaction_topic(bootstrap_servers: str, args: argparse.Namespace):
 
 
 def run_consumer(bootstrap_servers: str, args: argparse.Namespace):
+    """Consumes from 'transactions' topic"""
+    # Create deserializers for key and value
     key_deserializer = get_deserialize_helper(TransactionKey)
     value_deserializer = get_deserialize_helper(TransactionValue)
 
+    # Create consumer
     consumer = DeserializingConsumer({
         "bootstrap.servers": bootstrap_servers,
         "group.id": args.consumer_group,
@@ -92,10 +103,13 @@ def run_consumer(bootstrap_servers: str, args: argparse.Namespace):
     except KeyboardInterrupt:
         logging.info("Shutting down consumer")
     finally:
+        # Close down consumer to commit final offsets.
         consumer.close()
 
 
 def run_producer(bootstrap_servers: str, args: argparse.Namespace):
+    """Produces to 'transactions' topic"""
+    # Create producer
     producer = SerializingProducer({
         "bootstrap.servers": bootstrap_servers,
         "key.serializer": serialize_helper,
@@ -104,6 +118,7 @@ def run_producer(bootstrap_servers: str, args: argparse.Namespace):
 
     # Produce 10 messages using random data
     for _ in range(10):
+        # Create key and value
         key = TransactionKey(
             account_id=random.choice(ACCOUNT_IDS),
             transaction_zip_code=random.choice(ZIP_CODES),
@@ -117,6 +132,8 @@ def run_producer(bootstrap_servers: str, args: argparse.Namespace):
             transaction_cents=random.randint(0, 99),
             transaction_epoch_seconds=time.time()
         )
+
+        # Produce message
         producer.produce(
             topic="transactions",
             key=key,
@@ -129,6 +146,9 @@ def run_producer(bootstrap_servers: str, args: argparse.Namespace):
 def main(args: argparse.Namespace):
     """Entrypoint for program"""
     load_dotenv()
+
+    # Assign logger to stdout
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 
     try:
         bootstrap_servers = os.environ["KAFKA_BROKERS"]
